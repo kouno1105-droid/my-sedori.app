@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<title>AIせどり判断</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#007aff">
+<meta name="mobile-web-app-capable" content="yes">
+<style>
+body{font-family:-apple-system,BlinkMacSystemFont,sans-serif;background:#f2f2f7;margin:0;padding:14px}
+h1{font-size:20px;margin-bottom:12px}
+.card{background:#fff;border-radius:14px;padding:14px;margin-bottom:14px;box-shadow:0 1px 3px rgba(0,0,0,0.1)}
+label{font-size:13px;color:#555;display:block;margin-top:8px}
+input{width:100%;padding:10px;font-size:16px;margin-top:6px;margin-bottom:6px;border:1px solid #ddd;border-radius:8px;box-sizing:border-box}
+button{width:100%;padding:12px;font-size:16px;border:none;border-radius:12px;background:#007aff;color:#fff;margin-top:6px;cursor:pointer}
+button:active{opacity:0.7}
+.note{font-size:12px;color:#666;margin-top:6px}
+.result{font-size:18px;font-weight:bold;margin-top:8px;color:#007aff}
+.warn{font-size:13px;color:#d00;margin-top:6px}
+</style>
+</head>
+<body>
+
+<h1>⚡ 上級者判断再現AIせどり</h1>
+
+<div class="card">
+  <label>① 商品URL（Amazon / Yahoo）</label>
+  <input id="url" placeholder="商品ページURLを貼る">
+  <button onclick="analyzeURL()">URL解析</button>
+  <div class="note" id="guide">URLを貼って「URL解析」を押してください</div>
+</div>
+
+<div class="card">
+  <label>② 仕入れ価格</label>
+  <input id="cost" type="number" oninput="judge()">
+  <button onclick="pasteValue('cost')">📋 コピー価格貼り付け</button>
+
+  <label>③ 想定販売価格</label>
+  <input id="price" type="number" oninput="calcFee()">
+  <button onclick="pasteValue('price')">📋 コピー価格貼り付け</button>
+
+  <label>④ FBA手数料（15%自動）</label>
+  <input id="fee" type="number" readonly>
+</div>
+
+<div class="card">
+  <label>⑤ Amazonランキング</label>
+  <input id="rank" type="number" oninput="judge()">
+  <button onclick="pasteValue('rank')">📋 ランク貼り付け</button>
+</div>
+
+<div class="card" id="output" style="display:none">
+  <div class="result" id="resultText"></div>
+  <div id="actionText" style="font-size:20px; font-weight:bold; margin-top:5px;"></div>
+  <div class="warn" id="warnText"></div>
+</div>
+
+<script>
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('sw.js').then(() => console.log('PWA Ready'));
+}
+
+function analyzeURL(){
+  const url = document.getElementById("url").value.trim();
+  let text = "❌ 非対応URLです";
+  if(url.includes("amazon.co.jp")){
+    const asin = url.match(/\/dp\/([A-Z0-9]{10})/) || url.match(/\/gp\/product\/([A-Z0-9]{10})/) || url.match(/([A-Z0-9]{10})/);
+    text = asin ? "✅ Amazon検出: " + asin[0] : "⚠️ ASIN取得失敗";
+  } else if(url.includes("shopping.yahoo.co.jp")){
+    text = "✅ Yahoo検出";
+  }
+  document.getElementById("guide").innerText = text;
+}
+
+async function pasteValue(id){
+  try {
+    const text = await navigator.clipboard.readText();
+    document.getElementById(id).value = text.replace(/[^0-9]/g,"");
+    if(id === 'price') calcFee(); else judge();
+  } catch (err) {
+    alert("貼り付け権限を許可してください");
+  }
+}
+
+function calcFee(){
+  const p = Number(document.getElementById("price").value);
+  document.getElementById("fee").value = p ? Math.round(p * 0.15) : 0;
+  judge();
+}
+
+function judge(){
+  const cost = Number(document.getElementById("cost").value);
+  const price = Number(document.getElementById("price").value);
+  const fee = Number(document.getElementById("fee").value);
+  const rank = Number(document.getElementById("rank").value);
+
+  if(!cost || !price || !rank) return;
+
+  const profit = price - cost - fee;
+  let score = 0;
+  if(profit >= 700) score += 40; else if(profit >= 300) score += 20;
+  if((profit / cost) * 100 >= 20) score += 20;
+  if(rank <= 30000) score += 20; else if(rank <= 100000) score += 10;
+
+  let action = "❌ 見送り";
+  if(score >= 70) action = "◎ 仕入れOK";
+  else if(score >= 50) action = "○ 条件付き仕入れ";
+
+  document.getElementById("output").style.display = "block";
+  document.getElementById("resultText").innerText = `スコア：${score}点 / 利益：${profit}円`;
+  document.getElementById("actionText").innerText = action;
+  document.getElementById("warnText").innerText = rank > 100000 ? "⚠️ 回転注意" : "";
+}
+</script>
+</body>
+</html>
